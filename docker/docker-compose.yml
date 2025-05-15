@@ -1,0 +1,64 @@
+
+services:
+  database:
+    image: mysql:8.0
+    container_name: mysql
+    environment:
+      MYSQL_DATABASE: arle_zap
+      MYSQL_USER: arle
+      MYSQL_PASSWORD: arle
+      MYSQL_ROOT_PASSWORD: arle
+    volumes:
+      - C:\Users\PC\Downloads\levi\docker\mysql:/var/lib/mysql
+    ports:
+      - "3306:3306"
+    networks:
+      - backend
+
+  django:
+    build:
+      context: ../back-end/back_django
+      dockerfile: ../../docker/django/Dockerfile
+    command: >
+      sh -c "
+      python manage.py makemigrations &&
+      python manage.py migrate &&
+      daphne -b 0.0.0.0 -p 8000 conf.asgi:application"
+    volumes:
+      - ../back-end/back_django:/app
+    working_dir: /app
+    ports:
+      - "8000:8000"
+    restart: always
+    depends_on:
+      - database
+    environment:
+      - DEBUG=True
+      - DJANGO_SETTINGS_MODULE=conf.settings
+      - DB_ENGINE=django.db.backends.mysql
+      - DB_NAME=arle_zap
+      - DB_USER=arle
+      - DB_PASSWORD=arle
+      - DB_HOST=db
+      - DB_PORT=3306
+    networks:
+      - backend
+
+
+  waha:
+    image: devlikeapro/waha:latest
+    container_name: waha
+    ports:
+      - "3000:3000"
+    environment:
+      - WAHA_LOG_FORMAT=PRETTY
+    networks:
+      - backend
+    stdin_open: true
+    tty: true
+
+volumes:
+  mysql_data: 
+
+networks:
+  backend:

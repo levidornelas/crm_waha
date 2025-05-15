@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WhatsApp - Chats</title>
+
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: 'Segoe UI', 'Helvetica Neue', sans-serif;
+    }
+
+    body {
+      background-color: #ffffff;
+      color: #2c3e50;
+    }
+
+    .app-container {
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    .sidebar {
+      width: 450px;
+      background-color: #ffffff;
+      display: flex;
+      flex-direction: column;
+      /* Removendo o espaço entre a sidebar e o chat */
+      margin-right: 0;
+      /* Remove qualquer margem à direita */
+    }
+
+    .chat-area {
+      flex: 1;
+      background-color: #f8f9fa;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      color: #6c757d;
+      padding: 20px;
+      /* Garantindo que não haja gap entre a sidebar e a área de chat */
+      margin-left: 0;
+      /* Removendo qualquer margem à esquerda */
+    }
+
+    .header {
+      background-color: #007bff;
+      color: white;
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+
+    .header h1 {
+      font-size: 20px;
+      font-weight: 500;
+    }
+
+    .chat-list {
+      overflow-y: auto;
+      flex: 1;
+    }
+
+    .chat-item {
+      padding: 12px 16px;
+      display: flex;
+      border-bottom: 1px solid #e9edef;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+
+    .chat-item:hover {
+      background-color: #f0f8ff;
+    }
+
+    .chat-avatar {
+      width: 49px;
+      height: 49px;
+      border-radius: 50%;
+      overflow: hidden;
+      background-color: #e6f0ff;
+      margin-right: 15px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .chat-avatar img {
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      object-fit: cover;
+    }
+
+    .chat-content {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .chat-header {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 3px;
+    }
+
+    .chat-name {
+      font-weight: 500;
+      font-size: 16px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .chat-time {
+      font-size: 12px;
+      color: #6c757d;
+      white-space: nowrap;
+    }
+
+    .chat-message {
+      font-size: 14px;
+      color: #6c757d;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 40px 20px;
+      color: #8696a0;
+    }
+
+    .empty-state p {
+      font-size: 14px;
+      margin-top: 10px;
+    }
+
+    @media (max-width: 768px) {
+      .sidebar {
+        width: 100%;
+      }
+
+      .chat-area {
+        display: none;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="app-container">
+    <div class="sidebar">
+      <div class="header">
+        <h1>CRM Arle</h1>
+      </div>
+
+      {% if messages %}
+      <div class="messages-container">
+        <ul>
+          {% for message in messages %}
+          <li class="{{ message.tags }}">{{ message }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% endif %}
+
+      <div class="chat-list">
+        {% for chat in chats %}
+        <div class="chat-item" data-chat-id="{{ chat.id }}">
+          <div class="chat-avatar">
+            {% if chat.picture %}
+            <img src="{{ chat.picture }}" alt="Foto do contato" />
+            {% else %}
+            {{ chat.name|slice:":1" }}
+            {% endif %}
+          </div>
+          <div class="chat-content">
+            <div class="chat-header">
+              <div class="chat-name">{{ chat.name }}</div>
+              <div class="chat-time">{{ chat.lastMessage.formatted_time }}</div>
+            </div>
+            <div class="chat-message">{{ chat.lastMessage.body|truncatechars:60 }}</div>
+            <div class="chat-status" style="font-size: 12px; margin-top: 4px;">
+              Status: <span class="status-text">{{ chat.status }}</span>  </div>
+          </div>
+        </div>
+        {% empty %}
+        <div class="empty-state">
+          <p>Nenhum chat encontrado.</p>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    <div class="chat-area" id="chat-area">
+      <p>Selecione um chat para ver a conversa</p>
+    </div>
+  </div>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", function () {
+      let websocketGlobal = null; // WebSocket global para a sidebar
+      let websocketChat = null; // WebSocket específico para o chat atual
+      let idChatAtual = null;
+
+      // Atualiza a UI do chat com as mensagens recebidas
+      function atualizarUIChat(dados) {
+        console.log('Dados recebidos no atualizarUIChat:', dados);
+        // Atualiza a conversa (caso o chat esteja aberto)
+        if (dados.chatId == idChatAtual) {
+          const mensagensChat = document.getElementById('chatMessages');
+          if (mensagensChat) {
+            const div = document.createElement('div');
+            div.className = `message ${dados.fromMe ? 'from-me' : 'from-them'}`;
+
+            if (dados.hasMedia && dados.mediaUrl) {
+              switch (dados.mediaTipo) {
+                case "image/jpeg":
+                case "image/png":
+                  const img = document.createElement('img');
+                  const legenda = document.createElement('p');
+                  legenda.textContent = dados.message;
+                  legenda.style.fontSize = '14px';
+                  img.src = dados.mediaUrl;
+                  img.style.maxWidth = '100%';
+                  img.style.borderRadius = '8px';
+                  div.appendChild(img);
+                  div.appendChild(legenda);
+                  break;
+
+                case "audio/ogg":
+                case "audio/ogg; codecs=opus":
+                  const audio = document.createElement('audio');
+                  audio.controls = true;
+                  const audioSource = document.createElement('source');
+                  audioSource.src = dados.mediaUrl;
+                  audioSource.type = dados.mediaTipo;
+                  audio.style.maxWidth = '100%';
+                  audio.appendChild(audioSource);
+                  div.appendChild(audio);
+                  break;
+
+                case "video/mp4":
+                  const video = document.createElement('video');
+                  const legendaVideo = document.createElement('p');
+                  legendaVideo.textContent = dados.message;
+                  legendaVideo.style.fontSize = '14px';
+                  video.controls = true;
+                  const videoSource = document.createElement('source');
+                  videoSource.src = dados.mediaUrl;
+                  videoSource.type = dados.mediaTipo;
+                  video.style.maxWidth = '100%';
+                  video.appendChild(videoSource);
+                  div.appendChild(video);
+                  div.appendChild(legendaVideo);
+                  break;
+
+                case "application/pdf":
+                case "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+                  const link = document.createElement('a');
+                  const legendaPdf = document.createElement('p');
+                  legendaPdf.textContent = dados.message;
+                  legendaPdf.style.fontSize = '14px';
+                  link.href = dados.mediaUrl;
+                  link.target = "_blank";
+                  link.textContent = `📄 ${dados.mediaFileName || "Visualizar documento"}`;
+                  div.appendChild(link);
+                  div.appendChild(legendaPdf);
+                  break;
+
+                default:
+                  div.textContent = "Tipo de mídia não suportado.";
+              }
+            } else {
+              div.textContent = dados.message;
+            }
+            const timeDiv = document.createElement('div');
+            timeDiv.className = "message-time";
+            timeDiv.textContent = dados.timestamp;
+            div.appendChild(timeDiv);
+
+            mensagensChat.insertBefore(div, mensagensChat.firstChild);
+            mensagensChat.scrollTop = mensagensChat.scrollHeight;
+          }
+        }
+
+        // Responsável por atualizar a sidebar
+        const itemSidebar = document.querySelector(`.chat-item[data-chat-id="${dados.chatId}"]`);
+        if (itemSidebar) {
+          const preview = itemSidebar.querySelector('.chat-message');
+          const time = itemSidebar.querySelector('.chat-time');
+
+          if (preview) preview.textContent = dados.message;
+          if (time) time.textContent = dados.timestamp;
+
+          // Move o item para o topo da lista
+          const listaChats = document.querySelector('.chat-list');
+          if (listaChats && itemSidebar.parentNode === listaChats) {
+            listaChats.insertBefore(itemSidebar, listaChats.firstChild);
+          }
+        }
+      }
+
+
+      // Inicia o WebSocket global para escutar eventos de todos os chats (para atualizar a sidebar)
+      function iniciarWebSocketGlobal() {
+        websocketGlobal = new WebSocket(`ws://${window.location.host}/ws/chat/`); // WebSocket global
+
+        websocketGlobal.onmessage = function (e) {
+          const dados = JSON.parse(e.data);
+          atualizarUIChat(dados); 
+          if (dados.atendimento) {
+            const atendimento = dados.atendimento;
+            const itemSidebar = document.querySelector(`.chat-item[data-chat-id="${atendimento.chat_id}"]`);
+            if (itemSidebar) {
+              const statusSpan = itemSidebar.querySelector('.status-text');
+              if (statusSpan) {
+                statusSpan.textContent = atendimento.status;
+
+                switch (atendimento.status) {
+                  case 'pendente':
+                    statusSpan.style.color = 'red'; // amarelo
+                    break;
+                  case 'finalizado':
+                    statusSpan.style.color = 'black'; // cinza
+                    break;
+                  default:
+                    statusSpan.style.color = '#007bff'; // azul padrão
+                }
+              }
+            }
+          }
+        };
+      }
+
+      // Inicia o WebSocket específico para o chat
+      function iniciarWebSocketChat(idChat) {
+        if (websocketChat) {
+          // Já existe um WebSocket para este chat, não cria novamente.
+          return;
+        }
+
+        websocketChat = new WebSocket(`ws://${window.location.host}/ws/chat/${idChat}/`);
+
+        websocketChat.onmessage = function (e) {
+          const dados = JSON.parse(e.data);
+          atualizarUIChat(dados);
+        };
+      }
+
+      // Desconectar o WebSocket do chat anterior
+      function desconectarWebSocketChat() {
+        if (websocketChat) {
+          websocketChat.close();
+          websocketChat = null;
+        }
+      }
+
+      // Carrega o conteúdo do chat clicado
+      function carregarChat(idChat) {
+        // Desconectar o WebSocket do chat anterior, se houver.
+        desconectarWebSocketChat();
+
+        fetch(`/chats/${idChat}/`)
+          .then(response => response.text())
+          .then(data => {
+            idChatAtual = idChat;
+            document.getElementById('chat-area').innerHTML = data;
+
+            const formularioChat = document.getElementById('chatForm');
+            const mensagemTexto = document.getElementById('textMessage');
+
+            formularioChat.addEventListener('submit', function (e) {
+              e.preventDefault();
+              const textoMensagem = mensagemTexto.value.trim();
+              if (!textoMensagem) return;
+
+              // Envia a mensagem via WebSocket do chat específico
+              websocketChat.send(JSON.stringify({
+                text: textoMensagem,
+                chatId: idChat,
+              }));
+
+              mensagemTexto.value = '';
+            });
+
+            // Scroll para a última mensagem
+            const mensagensChat = document.getElementById('chatMessages');
+            mensagensChat.scrollTop = mensagensChat.scrollHeight;
+          })
+          .catch(error => console.error('Erro ao carregar o chat:', error));
+
+        // Iniciar WebSocket para o chat atual
+        iniciarWebSocketChat(idChat);
+      }
+
+      // Inicializa os cliques nos itens da sidebar
+      const itensChat = document.querySelectorAll('.chat-item');
+      itensChat.forEach(item => {
+        item.addEventListener('click', function () {
+          const idChat = item.getAttribute('data-chat-id');
+          carregarChat(idChat);
+        });
+      });
+
+      // Inicia o WebSocket global ao carregar a página
+      iniciarWebSocketGlobal();
+    });
+  </script>
+</body>
+
+</html>

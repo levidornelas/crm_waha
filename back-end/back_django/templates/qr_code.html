@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8">
+  <title>QR Code do WhatsApp</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      margin-top: 50px;
+    }
+
+    .qr-container {
+      display: inline-block;
+      padding: 20px;
+      border: 1px solid #ccc;
+      border-radius: 10px;
+    }
+
+    img {
+      width: 300px;
+      height: 300px;
+    }
+
+    .msg {
+      margin-top: 15px;
+      font-size: 18px;
+    }
+
+    button {
+      margin-top: 20px;
+      padding: 10px 20px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="qr-container">
+    <h2>Autenticação do WhatsApp</h2>
+
+    <form method="post">
+      {% csrf_token %}
+      <button type="submit">Criar Sessão</button>
+    </form>
+
+    <div id="qr-code-section" style="margin-top: 20px;">
+      <img id="qr-image" style="display:none;" alt="QR Code">
+    </div>
+  </div>
+</body>
+
+<script>
+  window.addEventListener("load", function () {
+    setTimeout(() => {
+      const img = document.getElementById("qr-image");
+      img.src = "http://localhost:3000/api/default/auth/qr";  
+      img.style.display = "block";
+    }, 5000);
+  });
+
+  const interval = setInterval(() => {
+    fetch("http://localhost:3000/api/sessions/default") 
+      .then(res => res.json())
+      .then(data => {
+        if (data.status === "WORKING") {
+          clearInterval(interval);
+          window.location.href = "{% url 'listar-chats' %}";
+        }
+      });
+  }, 3000);
+</script>
+
+</html>

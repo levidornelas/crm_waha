@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Chat</title>
+  <style>
+    /* Estilos do template do chat, mantidos da forma como você já fez */
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #f0f2f5;
+      margin: 0;
+    }
+
+    .chat-container {
+      width: 100%;
+      margin-left: 0;
+      background: white;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      border-radius: 8px;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+      overflow: hidden;
+    }
+
+    .chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px;
+      border-bottom: 1px solid #ddd;
+      display: flex;
+      flex-direction: column-reverse;
+    }
+
+    .message {
+      margin-bottom: 16px;
+      padding: 12px 18px;
+      border-radius: 18px;
+      max-width: 20%;
+      font-size: 14px;
+      line-height: 1.5;
+      word-wrap: break-word;
+    }
+
+    .from-me {
+      background: #dcf8c6;
+      align-self: flex-end;
+    }
+
+    .from-them {
+      background: #ffffff;
+      border: 1px solid #ddd;
+      align-self: flex-start;
+    }
+
+    .message-time {
+      font-size: 12px;
+      color: #888;
+      margin-top: 5px;
+      text-align: right;
+    }
+
+    form {
+      display: flex;
+      padding: 10px;
+      border-top: 1px solid #ddd;
+      background: #ffffff;
+    }
+
+    input[type="text"] {
+      flex: 1;
+      padding: 10px 15px;
+      border: 1px solid #ccc;
+      border-radius: 20px;
+      margin-right: 10px;
+      font-size: 14px;
+    }
+
+    button {
+      padding: 10px 16px;
+      background: #007bff;
+      color: white;
+      border: none;
+      border-radius: 20px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+
+    button:hover {
+      background: #0056b3;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="chat-container">
+    <div class="chat-messages" id="chatMessages">
+      {% for m in mensagens %}
+      <div class="message {% if m.from_me %}from-me{% else %}from-them{% endif %}">
+        {% if m.has_media and m.media_file %}
+        {% if m.media_tipo == "image/jpeg" or m.media_tipo == "image/png" %}
+        <img src="{{ m.media_file.url }}" alt="imagem" style="max-width: 100%; border-radius: 8px;">
+        {{ m.mensagem }}
+        {% elif m.media_tipo == "audio/ogg; codecs=opus" or m.media_tipo == "audio/ogg" %}
+        <audio controls style="max-width: 100%;">
+          <source src="{{ m.media_file.url }}" type="audio/ogg">
+          Seu navegador não suporta áudio.
+        </audio>
+        {% elif m.media_tipo == "video/mp4" %}
+        <video controls style="max-width: 100%; border-radius: 8px;">
+          <source src="{{ m.media_file.url }}" type="{{ m.media_tipo }}">
+          Seu navegador não suporta vídeo.
+        </video>
+        {{ m.mensagem }}
+        {% elif m.media_tipo == "application/pdf" or m.media_tipo == "application/vnd.openxmlformats-officedocument.wordprocessingml.document" %}
+        <a href="{{ m.media_file.url }}" target="_blank" style="color: #007bff; text-decoration: underline;">
+          📄 {{ m.media_file_name|default:"Visualizar PDF" }}
+        </a>
+        {% else %}
+        <a href="{{ m.media_file.url }}" download style="color: #007bff; text-decoration: underline;">
+          📎 {{ m.media_file_name|default:"Download do arquivo" }}
+        </a>
+        {% endif %}
+        {% else %}
+        {{ m.mensagem }}
+        {% endif %}
+        <div class="message-time">
+          {{ m.timestamp|date:"H:i" }}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    <form id="chatForm">
+      {% csrf_token %}
+      <input type="hidden" name="chatId" value="{{ chat_id }}" id="chatId">
+      <input type="text" name="text" placeholder="Digite uma mensagem..." required id="textMessage">
+      <button type="submit">Enviar</button>
+    </form>
+  </div>
+</body>
+
+</html>
