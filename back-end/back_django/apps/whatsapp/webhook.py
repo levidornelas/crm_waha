@@ -16,6 +16,7 @@ from .services.utils import normalizarGrupoWs, normalizar_id
 from .models import Mensagem, Atendimento
 from .services.waha import WahaClient
 
+
 @csrf_exempt
 def webhook_recebimento(request):
     if request.method != 'POST':
@@ -26,6 +27,13 @@ def webhook_recebimento(request):
         data = json.loads(body_unicode)
 
         payload = data.get('payload', {})
+        chat_id = payload.get('from') or payload.get('to')
+
+        # Ignorar grupos (chat_id terminando com '@g.us')
+        if chat_id and chat_id.endswith('@g.us') or chat_id == 'status@broadcast':
+            print(f'Ignorando mensagem de grupo ou Status: {chat_id}')
+            return JsonResponse({'status': 'ignored group message'})
+
         mensagem = payload.get('body', '')
         has_media = payload.get('hasMedia', False)
         media = payload.get('media', {}) or {}
@@ -34,16 +42,14 @@ def webhook_recebimento(request):
         media_mimetype = media.get('mimetype') if has_media else None
         media_filename = media.get('filename') if has_media else None
 
-        chat_id = payload.get('from') or payload.get('to')
         normalized_chat_id = normalizar_id(chat_id)
         from_me = payload.get('fromMe', False)
         timestamp_unix = payload.get('timestamp')
         timestamp_dt = make_aware(datetime.fromtimestamp(timestamp_unix))
 
-        # Processar mídia se existir
         media_file = None
         if media_url:
-            media_url_download = media_url.replace('localhost', 'waha')  # só para backend baixar
+            media_url_download = media_url.replace('localhost', 'waha')
             try:
                 response = requests.get(media_url_download)
                 response.raise_for_status()
@@ -58,16 +64,12 @@ def webhook_recebimento(request):
             except requests.RequestException as e:
                 print(f"Erro ao baixar mídia: {e}")
 
-
-        # Verificar e criar atendimento se necessário (apenas para mensagens recebidas)
         atendimento = None
         if not from_me:
             atendimento = create_or_get_atendimento(normalized_chat_id)
         else:
-            # Para mensagens enviadas, apenas buscar o atendimento existente
             atendimento = Atendimento.objects.filter(chat_id=normalized_chat_id).first()
 
-        # Salvar mensagem no banco
         Mensagem.objects.create(
             chat_id=normalized_chat_id,
             from_me=from_me,
@@ -81,7 +83,6 @@ def webhook_recebimento(request):
             atendimento=atendimento,
         )
 
-        # Enviar mensagem para os websockets
         group_name = normalizarGrupoWs(chat_id)
         msg_payload = {
             'type': 'new_message',
@@ -93,10 +94,10 @@ def webhook_recebimento(request):
             'chatId': chat_id,
             'mediaTipo': media_mimetype,
             'mediaFileName': media_filename,
-                'atendimento': {
-                    'chat_id': atendimento.chat_id if atendimento else None,
-                    'status': atendimento.status if atendimento else None,
-                } if atendimento else None
+            'atendimento': {
+                'chat_id': atendimento.chat_id if atendimento else None,
+                'status': atendimento.status if atendimento else None,
+            } if atendimento else None
         }
 
         print(f'Mensagem recebida e salva: {msg_payload}')
@@ -125,13 +126,10 @@ def create_or_get_atendimento(chat_id):
             )
             print(f"Novo atendimento criado para o chat {chat_id}, atribuído a {colaborador.username if colaborador else 'ninguém'}")
         chats = waha.get_chats()
-        chats_json = chats.json()  # lista de chats (dicionários)
+        chats_json = chats.json()
 
-        # Procurar o chat que tem o chat_id que estamos querendo
         chat_data = next((chat for chat in chats_json if chat.get('id') == atendimento.chat_id), None)
 
-
-        # Ao criar um atendimento, enviá-lo para o websocket principal por um evento 'novo_atendimento'; exibição disso no front-end
         channel_layer = get_channel_layer()
         async_to_sync(channel_layer.group_send)(
             'main_chat_updates',

@@ -13,7 +13,12 @@ from django.utils.timezone import make_aware
 from .services.utils import normalizar_id
 from .services.waha import WahaClient
 
+"""
+Os consumers são os Websockets: Eles permitem que haja uma comunicação em Real-Time do front com o backend, sem que haja F5;
+É preciso um JavaScript no front-end para consumir esses websockets e renderizar as informações de forma nativa.
+"""
 
+#Websocket responsável por notificar e enviar mensagens num chat específico
 class ChatConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         self.chat_id = self.scope['url_route']['kwargs']['chat_id']
@@ -136,7 +141,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
         except Exception as e:
             print(f"Erro ao recuperar atendimento: {str(e)}")
             return None
-        
+    
     @sync_to_async
     def atualizar_status_atendimento(self, atendimento):
         if atendimento and atendimento.status == 'pendente':
@@ -157,6 +162,8 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 }
             )
 
+# Websocket principal: atualizações em tempo real que correspondem a todas as conversas, não relacionada a chats específicos.
+# SERVE PARA ATUALIZAR A SIDEBAR DE MENSAGENS
 class MainConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         self.group_name = 'main_chat_updates'
