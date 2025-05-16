@@ -16,11 +16,9 @@ class Mensagem(models.Model):
     media_file_name = models.CharField(max_length=255, blank=True, null=True)
     media_file = models.FileField(upload_to='anexos/', blank=True, null=True)
 
-
     class Meta:
         verbose_name = 'Mensagem'
         verbose_name_plural = 'Mensagens'
-
 
 
 class Atendimento(models.Model):

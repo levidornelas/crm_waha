@@ -90,6 +90,27 @@
     button:hover {
       background: #0056b3;
     }
+
+    #btnFinalizarAtendimento {
+      display: block;
+      margin: 20px auto;
+      /* centraliza horizontalmente com espaçamento vertical */
+      padding: 6px 12px;
+      /* reduz tamanho */
+      font-size: 16px;
+      /* menor fonte */
+      width: 300px;
+      /* largura fixa menor */
+      border-radius: 15px;
+      background: #007bff;
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+
+    #btnFinalizarAtendimento:hover {
+      background: #0056b3;
+    }
   </style>
 </head>
 
@@ -113,7 +134,8 @@
           Seu navegador não suporta vídeo.
         </video>
         {{ m.mensagem }}
-        {% elif m.media_tipo == "application/pdf" or m.media_tipo == "application/vnd.openxmlformats-officedocument.wordprocessingml.document" %}
+        {% elif m.media_tipo == "application/pdf" or m.media_tipo ==
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document" %}
         <a href="{{ m.media_file.url }}" target="_blank" style="color: #007bff; text-decoration: underline;">
           📄 {{ m.media_file_name|default:"Visualizar PDF" }}
         </a>
