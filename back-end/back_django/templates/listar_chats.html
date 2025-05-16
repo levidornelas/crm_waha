@@ -390,8 +390,35 @@
 
           if (dados.type === 'novo_atendimento') {
             adicionarAtendimentoNaSidebar(dados.atendimento);
+
           } else if (dados.type === 'new_message') {
             atualizarUIChat(dados);
+
+          } else if (dados.type === 'atualizar_status') {
+            const atendimento = dados.atendimento;
+            const itemSidebar = document.querySelector(`.chat-item[data-chat-id="${atendimento.chat_id}"]`);
+            if (itemSidebar) {
+              const statusSpan = itemSidebar.querySelector('.status-text');
+              if (statusSpan) {
+                statusSpan.textContent = atendimento.status;
+                switch (atendimento.status) {
+                  case 'pendente':
+                    statusSpan.style.color = 'red';
+                    break;
+                  case 'finalizado':
+                    statusSpan.style.color = 'black';
+                    break;
+                  default:
+                    statusSpan.style.color = '#007bff';
+                }
+              }
+
+            
+              const listaChats = document.querySelector('.chat-list');
+              if (listaChats && itemSidebar.parentNode === listaChats) {
+                listaChats.insertBefore(itemSidebar, listaChats.firstChild);
+              }
+            }
           }
         };
       }

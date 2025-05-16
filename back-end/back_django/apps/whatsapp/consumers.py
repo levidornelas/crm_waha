@@ -3,9 +3,12 @@ import re
 from datetime import datetime
 import requests
 
+from channels.layers import get_channel_layer
 from channels.generic.websocket import AsyncWebsocketConsumer
 from asgiref.sync import sync_to_async
+from asgiref.sync import async_to_sync
 from django.utils.timezone import make_aware
+
 
 from .services.utils import normalizar_id
 from .services.waha import WahaClient
@@ -37,7 +40,6 @@ class ChatConsumer(AsyncWebsocketConsumer):
             if response.ok:
                 res_data = response.json()
                 timestamp_unix = int(res_data.get('timestamp', datetime.now().timestamp()))
-                timestamp_dt = make_aware(datetime.fromtimestamp(timestamp_unix))
               
                 await self.channel_layer.group_send(
                     self.room_group_name,
@@ -98,7 +100,9 @@ class ChatConsumer(AsyncWebsocketConsumer):
             'mediaFileName': event.get('mediaFileName'),
         }))
 
-        # Salvar no banco (via sync_to_async)
+        atendimento = await self.get_atendimento(normalizar_id(self.chat_id))
+
+        # Salvar no banco
         await self.salvar_mensagem(
             chat_id=normalizar_id(self.chat_id),
             from_me=event.get('fromMe', False),
@@ -108,9 +112,13 @@ class ChatConsumer(AsyncWebsocketConsumer):
             media_url=event.get('mediaUrl'),
             media_tipo=event.get('mediaTipo'),
             media_file_name=event.get('mediaFileName'),
-            media_file=None,  # se não tiver arquivo físico
-            atendimento=await self.get_atendimento(normalizar_id(self.chat_id)),
+            media_file=None,
+            atendimento=atendimento,
         )
+
+        # Atualizar status para "em_andamento" se for a primeira mensagem do atendente
+        if event.get('fromMe', False):
+            await self.atualizar_status_atendimento(atendimento)
 
     @sync_to_async
     def salvar_mensagem(self, **kwargs):
@@ -128,6 +136,26 @@ class ChatConsumer(AsyncWebsocketConsumer):
         except Exception as e:
             print(f"Erro ao recuperar atendimento: {str(e)}")
             return None
+        
+    @sync_to_async
+    def atualizar_status_atendimento(self, atendimento):
+        if atendimento and atendimento.status == 'pendente':
+            atendimento.status = 'em_andamento'
+            atendimento.save()
+
+            # Enviar evento para o grupo 'main_chat_updates'
+            channel_layer = get_channel_layer()
+            async_to_sync(channel_layer.group_send)(
+                'main_chat_updates',
+                {
+                    'type': 'atualizar_status',
+                    'atendimento': {
+                        'chat_id': atendimento.chat_id,
+                        'colaborador': atendimento.colaborador.username if atendimento.colaborador else None,
+                        'status': atendimento.status,
+                    },
+                }
+            )
 
 class MainConsumer(AsyncWebsocketConsumer):
     async def connect(self):
@@ -157,5 +185,11 @@ class MainConsumer(AsyncWebsocketConsumer):
     async def novo_atendimento(self, event):
         await self.send(text_data=json.dumps({
             'type': 'novo_atendimento',
+            'atendimento': event['atendimento'],
+        }))
+
+    async def atualizar_status(self, event):
+        await self.send(text_data=json.dumps({
+            'type': 'atualizar_status',
             'atendimento': event['atendimento'],
         }))

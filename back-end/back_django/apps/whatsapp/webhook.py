@@ -130,6 +130,8 @@ def create_or_get_atendimento(chat_id):
         # Procurar o chat que tem o chat_id que estamos querendo
         chat_data = next((chat for chat in chats_json if chat.get('id') == atendimento.chat_id), None)
 
+
+        # Ao criar um atendimento, enviá-lo para o websocket principal por um evento 'novo_atendimento'; exibição disso no front-end
         channel_layer = get_channel_layer()
         async_to_sync(channel_layer.group_send)(
             'main_chat_updates',
