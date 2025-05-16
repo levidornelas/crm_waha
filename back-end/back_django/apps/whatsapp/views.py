@@ -72,10 +72,12 @@ class ListarChatsView(View):
             # Filtrar chats que não são grupos e que pertencem ao colaborador logado
             chats = [
                 chat for chat in todos_os_chats
-                if not chat.get('id', '').endswith('@g.us') 
-                and chat.get('id') 
+                if not chat.get('id', '').endswith('@g.us')  # não grupos
+                and chat.get('id')
                 and normalizar_id(chat.get('id')) in chat_ids
+                and chat.get('id') != 'status@broadcast'    # exclui status (stories)
             ]
+
 
             for chat in chats:
                 timestamp = chat.get('lastMessage', {}).get('timestamp')
@@ -95,27 +97,13 @@ class ListarChatsView(View):
         except requests.RequestException as e:
             messages.error(request, f'Erro de conexão: {str(e)}')
             chats = []  
-
-        channel_layer = get_channel_layer()
-        for atendimento in atendimentos:
-            async_to_sync(channel_layer.group_send)(
-                "main_chat_updates",
-                {
-                    "type": "novo_atendimento",
-                    "atendimento": {
-                        "id": atendimento.id,
-                        "chat_id": atendimento.chat_id,
-                        "status": atendimento.status,
-                        "iniciado_em": atendimento.iniciado_em.strftime('%Y-%m-%d %H:%M:%S'),
-                    },
-                },
-            )
-
         return render(request, 'listar_chats.html', {'chats': chats})
+
 
 @method_decorator(login_required, name='dispatch')
 class VerChatView(View):
     def get(self, request, chat_id, *args, **kwargs):
+        atendimento = None  # <<< Correção aqui
         try:
             normalized_chat_id = normalizar_id(chat_id)
             

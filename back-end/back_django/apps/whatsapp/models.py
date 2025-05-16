@@ -24,7 +24,6 @@ class Mensagem(models.Model):
 
 
 class Atendimento(models.Model):
-
     STATUS_CHOICES = [
         ('pendente', 'Pendente'),
         ('em_andamento', 'Em andamento'),

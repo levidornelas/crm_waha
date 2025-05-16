@@ -14,7 +14,7 @@ from django.core.files.base import ContentFile
 
 from .services.utils import normalizarGrupoWs, normalizar_id
 from .models import Mensagem, Atendimento
-
+from .services.waha import WahaClient
 
 @csrf_exempt
 def webhook_recebimento(request):
@@ -113,25 +113,38 @@ def webhook_recebimento(request):
 
 
 def create_or_get_atendimento(chat_id):
-    """Cria um novo atendimento ou retorna o existente para o chat_id."""
+    waha = WahaClient()
     try:
-        # Verificar se já existe um atendimento para este chat
         atendimento = Atendimento.objects.filter(chat_id=chat_id).first()
-        
-
-        # FUNÇÃO IMPORTANTE A SER ADICIONADA: REDIRECIONAR AO COLABORADOR;
         if not atendimento:
-            # Se não existir, criar um novo atendimento
-            # Atribuir ao primeiro colaborador disponível (simplificado)
             colaborador = User.objects.filter(is_staff=True).first()
-            
             atendimento = Atendimento.objects.create(
                 chat_id=chat_id,
                 colaborador=colaborador,
                 status='pendente'
             )
             print(f"Novo atendimento criado para o chat {chat_id}, atribuído a {colaborador.username if colaborador else 'ninguém'}")
-                   
+        chats = waha.get_chats()
+        chats_json = chats.json()  # lista de chats (dicionários)
+
+        # Procurar o chat que tem o chat_id que estamos querendo
+        chat_data = next((chat for chat in chats_json if chat.get('id') == atendimento.chat_id), None)
+
+        channel_layer = get_channel_layer()
+        async_to_sync(channel_layer.group_send)(
+            'main_chat_updates',
+            {
+                'type': 'novo_atendimento',
+                'atendimento': {
+                    'chat_id': atendimento.chat_id,
+                    'colaborador': atendimento.colaborador.username if atendimento.colaborador else None,
+                    'status': atendimento.status,
+                    'picture': chat_data.get('picture') if chat_data else None,
+                    'lastMessage': chat_data.get('lastMessage'),
+                    'name': chat_data.get('name')
+                },
+            }
+        )
         return atendimento
     except Exception as e:
         print(f"Erro ao criar/obter atendimento: {str(e)}")

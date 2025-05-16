@@ -192,7 +192,7 @@
             </div>
             <div class="chat-message">{{ chat.lastMessage.body|truncatechars:60 }}</div>
             <div class="chat-status" style="font-size: 12px; margin-top: 4px;">
-              Status: <span class="status-text">{{ chat.status }}</span>  </div>
+              Status: <span class="status-text">{{ chat.status }}</span> </div>
           </div>
         </div>
         {% empty %}
@@ -210,13 +210,13 @@
   <script>
     document.addEventListener("DOMContentLoaded", function () {
       let websocketGlobal = null; // WebSocket global para a sidebar
-      let websocketChat = null; // WebSocket específico para o chat atual
+      let websocketChat = null;   // WebSocket específico para o chat atual
       let idChatAtual = null;
 
       // Atualiza a UI do chat com as mensagens recebidas
       function atualizarUIChat(dados) {
         console.log('Dados recebidos no atualizarUIChat:', dados);
-        // Atualiza a conversa (caso o chat esteja aberto)
+
         if (dados.chatId == idChatAtual) {
           const mensagensChat = document.getElementById('chatMessages');
           if (mensagensChat) {
@@ -284,6 +284,7 @@
             } else {
               div.textContent = dados.message;
             }
+
             const timeDiv = document.createElement('div');
             timeDiv.className = "message-time";
             timeDiv.textContent = dados.timestamp;
@@ -294,7 +295,7 @@
           }
         }
 
-        // Responsável por atualizar a sidebar
+        // Atualiza a sidebar
         const itemSidebar = document.querySelector(`.chat-item[data-chat-id="${dados.chatId}"]`);
         if (itemSidebar) {
           const preview = itemSidebar.querySelector('.chat-message');
@@ -303,42 +304,94 @@
           if (preview) preview.textContent = dados.message;
           if (time) time.textContent = dados.timestamp;
 
-          // Move o item para o topo da lista
           const listaChats = document.querySelector('.chat-list');
           if (listaChats && itemSidebar.parentNode === listaChats) {
             listaChats.insertBefore(itemSidebar, listaChats.firstChild);
           }
+        } else {
+          fetch('/chats/sidebar/')
+            .then(response => response.text())
+            .then(html => {
+              const novaSidebar = document.createElement('div');
+              novaSidebar.innerHTML = html;
+              const novaLista = novaSidebar.querySelector('.chat-list');
+              if (novaLista) {
+                document.querySelector('.chat-list').innerHTML = novaLista.innerHTML;
+                // Rebind dos cliques da sidebar nova
+                bindClicksSidebar();
+              }
+            });
+        }
+      }
+
+      // Adiciona novo atendimento na sidebar
+      function adicionarAtendimentoNaSidebar(atendimento) {
+        const listaChats = document.querySelector('.chat-list');
+        if (!listaChats) return;
+
+        let itemExistente = document.querySelector(`.chat-item[data-chat-id="${atendimento.chat_id}"]`);
+        if (itemExistente) {
+          const statusSpan = itemExistente.querySelector('.status-text');
+          if (statusSpan) {
+            statusSpan.textContent = atendimento.status;
+            switch (atendimento.status) {
+              case 'pendente':
+                statusSpan.style.color = 'red';
+                break;
+              case 'finalizado':
+                statusSpan.style.color = 'black';
+                break;
+              default:
+                statusSpan.style.color = '#007bff';
+            }
+          }
+          listaChats.insertBefore(itemExistente, listaChats.firstChild);
+        } else {
+          const novoItem = document.createElement('div');
+          novoItem.className = 'chat-item';
+          novoItem.setAttribute('data-chat-id', atendimento.chat_id);
+
+          novoItem.innerHTML = `
+      <div class="chat-avatar">
+        ${atendimento.picture
+              ? `<img src="${atendimento.picture}" alt="Foto do contato" />`
+              : `<span>${atendimento.chat_id.slice(0, 1).toUpperCase()}</span>`
+            }
+            </div>
+            <div class="chat-content">
+              <div class="chat-header">
+                <div class="chat-name">${atendimento.name}</div>
+                <div class="chat-time">${atendimento.iniciado_em || ''}</div>
+              </div>
+              <div class="chat-message">${atendimento.lastMessage ? atendimento.lastMessage.body?.slice(0, 60) : 'Novo atendimento'}</div>
+              <div class="chat-status" style="font-size: 12px; margin-top: 4px;">
+                Status: <span class="status-text" style="color: ${atendimento.status === 'pendente' ? 'red' : atendimento.status === 'finalizado' ? 'black' : '#007bff'}">
+                  ${atendimento.status}
+                </span>
+              </div>
+            </div>
+          `;
+
+          novoItem.addEventListener('click', function () {
+            carregarChat(atendimento.chat_id);
+          });
+
+          listaChats.insertBefore(novoItem, listaChats.firstChild);
         }
       }
 
 
-      // Inicia o WebSocket global para escutar eventos de todos os chats (para atualizar a sidebar)
+      // Inicia o WebSocket global para escutar eventos de todos os chats
       function iniciarWebSocketGlobal() {
-        websocketGlobal = new WebSocket(`ws://${window.location.host}/ws/chat/`); // WebSocket global
+        websocketGlobal = new WebSocket(`ws://${window.location.host}/ws/chat/`);
 
         websocketGlobal.onmessage = function (e) {
           const dados = JSON.parse(e.data);
-          atualizarUIChat(dados); 
-          if (dados.atendimento) {
-            const atendimento = dados.atendimento;
-            const itemSidebar = document.querySelector(`.chat-item[data-chat-id="${atendimento.chat_id}"]`);
-            if (itemSidebar) {
-              const statusSpan = itemSidebar.querySelector('.status-text');
-              if (statusSpan) {
-                statusSpan.textContent = atendimento.status;
 
-                switch (atendimento.status) {
-                  case 'pendente':
-                    statusSpan.style.color = 'red'; // amarelo
-                    break;
-                  case 'finalizado':
-                    statusSpan.style.color = 'black'; // cinza
-                    break;
-                  default:
-                    statusSpan.style.color = '#007bff'; // azul padrão
-                }
-              }
-            }
+          if (dados.type === 'novo_atendimento') {
+            adicionarAtendimentoNaSidebar(dados.atendimento);
+          } else if (dados.type === 'new_message') {
+            atualizarUIChat(dados);
           }
         };
       }
@@ -346,8 +399,8 @@
       // Inicia o WebSocket específico para o chat
       function iniciarWebSocketChat(idChat) {
         if (websocketChat) {
-          // Já existe um WebSocket para este chat, não cria novamente.
-          return;
+          websocketChat.close();
+          websocketChat = null;
         }
 
         websocketChat = new WebSocket(`ws://${window.location.host}/ws/chat/${idChat}/`);
@@ -358,7 +411,7 @@
         };
       }
 
-      // Desconectar o WebSocket do chat anterior
+      // Desconectar o WebSocket do chat atual
       function desconectarWebSocketChat() {
         if (websocketChat) {
           websocketChat.close();
@@ -368,7 +421,6 @@
 
       // Carrega o conteúdo do chat clicado
       function carregarChat(idChat) {
-        // Desconectar o WebSocket do chat anterior, se houver.
         desconectarWebSocketChat();
 
         fetch(`/chats/${idChat}/`)
@@ -385,7 +437,6 @@
               const textoMensagem = mensagemTexto.value.trim();
               if (!textoMensagem) return;
 
-              // Envia a mensagem via WebSocket do chat específico
               websocketChat.send(JSON.stringify({
                 text: textoMensagem,
                 chatId: idChat,
@@ -394,26 +445,28 @@
               mensagemTexto.value = '';
             });
 
-            // Scroll para a última mensagem
             const mensagensChat = document.getElementById('chatMessages');
             mensagensChat.scrollTop = mensagensChat.scrollHeight;
           })
           .catch(error => console.error('Erro ao carregar o chat:', error));
 
-        // Iniciar WebSocket para o chat atual
         iniciarWebSocketChat(idChat);
       }
 
-      // Inicializa os cliques nos itens da sidebar
-      const itensChat = document.querySelectorAll('.chat-item');
-      itensChat.forEach(item => {
-        item.addEventListener('click', function () {
-          const idChat = item.getAttribute('data-chat-id');
-          carregarChat(idChat);
+      // Função para (re)associar eventos de clique nos itens da sidebar
+      function bindClicksSidebar() {
+        const itensChat = document.querySelectorAll('.chat-item');
+        itensChat.forEach(item => {
+          item.removeEventListener('click', carregarChat);
+          item.addEventListener('click', function () {
+            const idChat = item.getAttribute('data-chat-id');
+            carregarChat(idChat);
+          });
         });
-      });
+      }
 
-      // Inicia o WebSocket global ao carregar a página
+      // Inicializa cliques e WebSocket global ao carregar a página
+      bindClicksSidebar();
       iniciarWebSocketGlobal();
     });
   </script>
