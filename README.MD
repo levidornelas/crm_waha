@@ -7,19 +7,25 @@ cd docker
 docker-compose up --build
 ```
 
-### Acesse o aplicativo
-
-* O Django estará disponível em: `http://localhost:8000`
-* O WAHA estará disponível em: `http://localhost:3000`
-
-
 ### Adicione o webhook no WAHA: 
 
 * Após acessar o django, a sessão default deve ser startada automaticamente.
 * Clique em 'configuration', que estará como símbolo de engrenagem na sessão
 * Clique no +webhook, e adicione um webhook com url 'http://django:8000/webhook/'
 * Remova o event de session status e deixe só o de message.
+* Ao depender da quantidade de mensagens, a sessão irá demorar para sincronizar (como no whatsapp web.)
 
+### Crie um SUPERUSER: 
+
+```
+docker exec -it docker-django-1 python manage.py createsuperuser
+```
+
+
+### Acesse o aplicativo
+
+* O Django estará disponível em: `http://localhost:8000`
+* O WAHA estará disponível em: `http://localhost:3000`
 
 ### TODO: 
 
